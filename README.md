@@ -57,13 +57,16 @@ Contraseña para todos los usuarios demo: `123456`.
 
 ## Trabajo en equipo
 
-1. Actualiza tu copia local: `git pull origin main`.
-2. Crea una rama descriptiva: `git switch -c feat/nombre-del-modulo`.
-3. Instala dependencias y ejecuta `npm run lint` y `npm run build` antes de subir cambios.
-4. Publica la rama: `git push -u origin nombre-de-tu-rama`.
-5. Abre un Pull Request hacia `main` y espera la revisión del equipo.
+La rama `feat/ventas` es la rama compartida de integración para el módulo Comercial/Ventas. Cada integrante debe crear una rama temporal por tarea o funcionalidad, no una rama permanente por persona.
 
-El workflow de GitHub Actions ejecuta automáticamente lint y build en cada Pull Request y en cada push a `main`.
+1. Actualiza la rama de integración: `git switch feat/ventas` y `git pull origin feat/ventas`.
+2. Crea una rama para tu tarea: `git switch -c feat/ventas-nombre-de-la-tarea`.
+3. Ejecuta `npm run lint` y `npm run build` antes de subir cambios.
+4. Publica tu rama: `git push -u origin feat/ventas-nombre-de-la-tarea`.
+5. Abre un Pull Request hacia `feat/ventas` y espera la revisión del equipo.
+6. Cuando el módulo esté estable, integra `feat/ventas` hacia `main`.
+
+El workflow de GitHub Actions ejecuta automáticamente lint y build en los Pull Requests y en los cambios integrados en `main`.
 
 ## Estructura principal
 

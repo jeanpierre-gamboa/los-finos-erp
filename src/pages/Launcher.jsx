@@ -2,7 +2,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../app/AuthContext.jsx'
 
 const MODULES = [
-  { key: 'ventas', label: 'Ventas', roles: ['gerente', 'caja', 'mozo'] },
+  { key: 'ventas', label: 'Comercial', roles: ['gerente', 'caja', 'mozo'] },
   { key: 'cocina', label: 'Cocina', roles: ['gerente', 'cocina'] },
   { key: 'compras', label: 'Compras', roles: ['gerente', 'almacen'] },
   { key: 'almacenes', label: 'Almacenes', roles: ['gerente', 'almacen'] },

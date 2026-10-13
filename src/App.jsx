@@ -6,6 +6,8 @@ import ModuleShell from './pages/ModuleShell.jsx'
 import Compras from './pages/Compras.jsx'
 import './App.css'
 import { ComprasProvider } from './modules/compras/ComprasContext.jsx'
+import Comercial from './pages/Comercial.jsx'
+import { ComercialProvider } from './modules/comercial/ComercialContext.jsx'
 
 function AppRoutes() {
   const { user } = useAuth()
@@ -30,6 +32,14 @@ function AppRoutes() {
         element={user ? <Compras view="list" /> : <Navigate to="/login" replace />}
       />
       <Route
+        path="/app/ventas"
+        element={user ? <Comercial /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/app/cocina"
+        element={user ? <Comercial view="cocina" /> : <Navigate to="/login" replace />}
+      />
+      <Route
         path="/app/:modulo"
         element={user ? <ModuleShell /> : <Navigate to="/login" replace />}
       />
@@ -43,7 +53,9 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <ComprasProvider>
-          <AppRoutes />
+          <ComercialProvider>
+            <AppRoutes />
+          </ComercialProvider>
         </ComprasProvider>
       </BrowserRouter>
     </AuthProvider>

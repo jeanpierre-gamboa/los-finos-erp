@@ -292,6 +292,11 @@ tr:last-child td { border-bottom: 0; }
 .status-autorizada { background: #e8f0fb; color: #1b365d; }
 .status-por-recibir { background: #fff6d9; color: #856404; }
 .status-recibida { background: #e6f5ed; color: #20734a; }
+.status-confirmado, .status-pendiente { background: #fff6d9; color: #856404; }
+.status-en-preparación { background: #e8f0fb; color: #1b365d; }
+.status-atendido, .status-aceptado { background: #e6f5ed; color: #20734a; }
+.status-anulado, .status-rechazado { background: #fff1e8; color: #b94a00; }
+.status-contingencia, .status-nc { background: #f0eafc; color: #604a91; }
 .authorize-button { padding: 7px 10px; border-radius: 6px; background: #1b365d; color: #fff; font-size: 0.78rem; font-weight: 800; }
 .back-link { margin-top: 22px; padding: 0; background: transparent; color: #1b365d; font-weight: 700; }
 .compact-heading { margin-bottom: 22px; }
@@ -320,11 +325,61 @@ tr:last-child td { border-bottom: 0; }
 .inline-back { display: block; margin: 0 0 16px; }
 .form-actions { justify-content: flex-end; margin-top: 28px; padding-top: 22px; border-top: 1px solid #e6ebf2; }
 
+.commercial-line { grid-template-columns: minmax(220px, 1fr) 110px 150px 110px; }
+.commercial-line .input-row input:disabled { color: #68778b; opacity: 1; cursor: not-allowed; }
+.queue-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.queue-column { min-width: 0; }
+.queue-column-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.queue-column-heading h2 { margin: 0; color: #1b365d; font-size: 1.05rem; }
+.queue-column-heading span { display: grid; place-items: center; min-width: 28px; height: 28px; border-radius: 50%; background: #e8f0fb; color: #1b365d; font-size: 0.8rem; font-weight: 800; }
+.queue-card { padding: 16px; border: 1px solid #dfe7f1; border-radius: 10px; background: #fff; box-shadow: 0 8px 18px rgba(27, 54, 93, 0.05); }
+.queue-card + .queue-card { margin-top: 12px; }
+.queue-card-heading, .queue-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.queue-card-heading strong { display: block; color: #1b365d; }
+.queue-card-heading span { display: block; margin-top: 5px; color: #778497; font-size: 0.8rem; }
+.queue-card > p { margin: 16px 0; color: #364860; font-size: 0.9rem; line-height: 1.45; }
+.queue-card-footer > strong { color: #1b365d; }
+.cancel-button { margin-left: 8px; padding: 7px 10px; border: 1px solid #e1b9a5; border-radius: 6px; background: #fff; color: #b94a00; cursor: pointer; font-size: 0.78rem; font-weight: 800; }
+.incident-form { display: grid; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #e6ebf2; }
+.incident-form .input-row { gap: 5px; font-size: 0.8rem; }
+.incident-form select, .incident-form textarea { width: 100%; border: 1px solid #d8e0eb; border-radius: 7px; padding: 9px 10px; background: #f9fbff; color: #1b365d; resize: vertical; }
+.incident-note { margin: 14px 0 0 !important; padding-top: 10px; border-top: 1px solid #e6ebf2; color: #856404 !important; font-size: 0.8rem !important; }
+.empty-state { padding: 22px 12px; border: 1px dashed #cad5e2; border-radius: 10px; color: #778497; font-size: 0.9rem; text-align: center; }
+.kitchen-list, .cobro-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.kitchen-card, .recipe-release, .sunat-panel, .recent-receipts, .confirmation-panel { padding: 20px; border: 1px solid #dfe7f1; border-radius: 12px; background: #fff; box-shadow: 0 10px 24px rgba(27, 54, 93, 0.06); }
+.kitchen-card p { color: #364860; line-height: 1.45; }
+.kitchen-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.recipe-release { margin-top: 24px; }
+.recipe-release h2, .section-title { margin: 0; color: #1b365d; font-size: 1.1rem; }
+.payment-form { padding: 0; overflow: hidden; }
+.payment-form .form-grid, .payment-form .totals-box, .payment-form .form-actions { padding-left: 28px; padding-right: 28px; }
+.payment-form .form-grid { padding-top: 24px; }
+.payment-form .detail-heading { margin-bottom: 0; }
+.totals-box { display: flex; justify-content: flex-end; gap: 28px; margin-top: 24px; padding-top: 18px; padding-bottom: 18px; border-top: 1px solid #e6ebf2; border-bottom: 1px solid #e6ebf2; color: #68778b; }
+.totals-box span { display: flex; flex-direction: column; gap: 5px; font-size: 0.82rem; }
+.totals-box strong { color: #1b365d; font-size: 1rem; }
+.sunat-panel, .recent-receipts { margin-top: 22px; padding: 0; overflow: hidden; }
+.sunat-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px 22px; }
+.receipt-actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 360px; }
+.period-panel { overflow: hidden; }
+.period-filters { display: flex; gap: 18px; padding: 20px 22px; border-bottom: 1px solid #e6ebf2; }
+.period-filters .input-row { min-width: 180px; }
+.confirmation-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.confirmation-panel .eyebrow, .confirmation-panel h2, .confirmation-panel p { width: 100%; margin: 0; }
+.confirmation-panel h2 { color: #1b365d; }
+.commercial-menu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.commercial-menu-link { display: flex; min-height: 132px; flex-direction: column; justify-content: space-between; gap: 12px; padding: 20px; border: 1px solid #dfe7f1; border-radius: 12px; background: #fff; color: #1b365d; text-decoration: none; box-shadow: 0 10px 24px rgba(27, 54, 93, 0.06); transition: transform 0.15s ease, border-color 0.15s ease; }
+.commercial-menu-link:hover { border-color: #e85d04; transform: translateY(-2px); }
+.commercial-menu-link strong { font-size: 1.05rem; }
+.commercial-menu-link span { color: #68778b; font-size: 0.9rem; line-height: 1.4; }
+.credit-picker { display: grid; gap: 22px; }
+
 @media (max-width: 700px) {
   .page-heading, .lines-heading, .table-toolbar { align-items: flex-start; flex-direction: column; }
-  .form-grid, .line-row { grid-template-columns: 1fr; }
+  .form-grid, .line-row, .queue-grid, .kitchen-list, .cobro-grid, .commercial-menu { grid-template-columns: 1fr; }
   .order-form { padding: 20px; }
   .line-row { align-items: stretch; }
   .remove-line { align-self: flex-start; }
   .toolbar-note { white-space: normal; }
+  .period-filters, .totals-box { flex-direction: column; align-items: stretch; }
 }

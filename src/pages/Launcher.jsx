@@ -2,7 +2,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../app/AuthContext.jsx'
 
 const MODULES = [
-  { key: 'ventas', label: 'Ventas', roles: ['gerente', 'caja', 'mozo'] },
+  { key: 'comercial', label: 'Comercial', roles: ['gerente', 'caja', 'mozo'] },
   { key: 'cocina', label: 'Cocina', roles: ['gerente', 'cocina'] },
   { key: 'compras', label: 'Compras', roles: ['gerente', 'almacen'] },
   { key: 'almacenes', label: 'Almacenes', roles: ['gerente', 'almacen'] },
@@ -43,7 +43,7 @@ function Launcher() {
             key={module.key}
             type="button"
             className="module-card"
-            onClick={() => navigate(`/app/${module.key}`)}
+            onClick={() => navigate(module.key === 'comercial' ? '/comercial' : `/app/${module.key}`)}
           >
             <span className="module-icon">{module.label.slice(0, 2).toUpperCase()}</span>
             <span className="module-name">{module.label}</span>

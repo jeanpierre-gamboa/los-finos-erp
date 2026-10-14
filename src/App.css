@@ -323,6 +323,9 @@ tr:last-child td { border-bottom: 0; }
 .comercial-page { background: #f7f5f0; }
 .comercial-header { padding-bottom: 20px; }
 .comercial-main { padding-top: 24px; padding-bottom: 48px; }
+.section-nav { max-width: 1200px; margin: 0 auto; display: flex; gap: 8px; padding: 0 0 4px; border-bottom: 1px solid #dfe7f1; }
+.section-nav button { border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; background: transparent; color: #68778b; font-weight: 800; cursor: pointer; }
+.section-nav button:hover, .section-nav button.active { border-bottom-color: #e85d04; color: #1b365d; }
 .comercial-form { max-width: 920px; }
 .form-note { align-self: end; padding: 13px 14px; border: 1px dashed #cad5e2; border-radius: 8px; color: #68778b; font-size: 0.9rem; }
 .comercial-line { grid-template-columns: minmax(260px, 1fr) 140px 150px 34px; }
@@ -342,6 +345,7 @@ tr:last-child td { border-bottom: 0; }
 .incident-form input { min-width: 0; flex: 1; border: 1px solid #d8e0eb; border-radius: 8px; padding: 10px 12px; }
 .incident-form .primary-button { padding: 9px 12px; }
 .incident-form .primary-button:disabled { cursor: not-allowed; opacity: 0.5; }
+.incident-success { margin: 14px 0 0; padding: 10px 12px; border-radius: 8px; background: #e6f5ed; color: #20734a; font-size: 0.86rem; font-weight: 700; }
 .kitchen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 18px; }
 .kitchen-card { border-top: 4px solid #e85d04; box-shadow: 0 10px 22px rgba(27, 54, 93, 0.06); }
 .kitchen-card .primary-button { width: 100%; }
@@ -356,4 +360,6 @@ tr:last-child td { border-bottom: 0; }
   .toolbar-note { white-space: normal; }
   .line-price { text-align: left; }
   .incident-form { flex-direction: column; }
+  .section-nav { overflow-x: auto; }
+  .section-nav button { flex: 0 0 auto; }
 }

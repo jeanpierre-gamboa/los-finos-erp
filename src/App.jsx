@@ -36,6 +36,10 @@ function AppRoutes() {
         element={user ? <Comercial /> : <Navigate to="/login" replace />}
       />
       <Route
+        path="/app/ventas/nuevo"
+        element={user ? <Comercial view="new" /> : <Navigate to="/login" replace />}
+      />
+      <Route
         path="/app/cocina"
         element={user ? <Comercial view="cocina" /> : <Navigate to="/login" replace />}
       />

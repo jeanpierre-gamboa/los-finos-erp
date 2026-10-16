@@ -12,11 +12,12 @@ function normalizeChannel(value) {
 }
 
 function normalizeProduct(product) {
-  const price = Number(product.PrecioActual)
   return {
     id: Number(product.ProductoID),
     nombre: product.NombreProducto,
-    precios: { 'Salón': price, WhatsApp: price, Llamafood: price },
+    categoriaId: Number(product.CategoriaID),
+    categoriaNombre: product.NombreCategoria,
+    precioActual: Number(product.PrecioActual),
   }
 }
 
@@ -30,6 +31,18 @@ function normalizeOrder(order) {
       cantidad: Number(line.cantidad),
       precioUnitario: Number(line.precioUnitario),
     })),
+  }
+}
+
+function normalizeComprobante(comprobante) {
+  return {
+    ...comprobante,
+    id: Number(comprobante.id || comprobante.ComprobanteID),
+    pedidoId: Number(comprobante.pedidoId || comprobante.PedidoID),
+    base: Number(comprobante.base || comprobante.Base),
+    igv: Number(comprobante.igv || comprobante.IGV),
+    total: Number(comprobante.total || comprobante.Total),
+    originalComprobanteId: comprobante.originalComprobanteId ? Number(comprobante.originalComprobanteId) : null,
   }
 }
 
@@ -50,23 +63,32 @@ async function readResponse(response) {
 }
 
 function ComercialProvider({ children }) {
-  const [data, setData] = useState({ pedidos: [], comandas: [], incidencias: [] })
+  const [data, setData] = useState({ pedidos: [], comandas: [], incidencias: [], facturas: [] })
   const [platos, setPlatos] = useState([])
+  const [categorias, setCategorias] = useState([])
+  const [queueFilter, setQueueFilter] = useState('activos')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const cargarDatos = async () => {
     setLoading(true)
     try {
-      const [productsResponse, ordersResponse] = await Promise.all([
+      const [productsResponse, categoriesResponse, ordersResponse, invoicesResponse, incidentsResponse] = await Promise.all([
         fetch(`${API_URL}/productos`),
+        fetch(`${API_URL}/categorias`),
         fetch(`${API_URL}/pedidos`),
+        fetch(`${API_URL}/comprobantes`),
+        fetch(`${API_URL}/incidencias`),
       ])
       const products = await readResponse(productsResponse)
+      const categories = await readResponse(categoriesResponse)
       const orders = await readResponse(ordersResponse)
+      const invoices = await readResponse(invoicesResponse)
+      const incidents = await readResponse(incidentsResponse)
       const pedidos = orders.map(normalizeOrder)
       setPlatos(products.map(normalizeProduct))
-      setData((current) => ({ ...current, pedidos, comandas: pedidos.map(makeComanda) }))
+      setCategorias(categories.map((category) => ({ id: Number(category.CategoriaID), nombre: category.NombreCategoria })))
+      setData((current) => ({ ...current, pedidos, comandas: pedidos.map(makeComanda), facturas: invoices.map(normalizeComprobante), incidencias: incidents }))
       setError('')
     } catch (requestError) {
       setError(requestError.message)
@@ -93,6 +115,7 @@ function ComercialProvider({ children }) {
       return pedido
     } catch (requestError) {
       setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 2500)
       throw requestError
     }
   }
@@ -113,20 +136,104 @@ function ComercialProvider({ children }) {
       return updated
     } catch (requestError) {
       setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 3000)
       throw requestError
     }
   }
 
   const actualizarPedido = (pedidoId, changes) => setData((current) => ({ ...current, pedidos: current.pedidos.map((pedido) => pedido.id === pedidoId ? { ...pedido, ...changes } : pedido) }))
-  const anularPedido = (pedidoId) => actualizarPedido(pedidoId, { estado: 'Anulado', anuladoEn: Date.now() })
+  const anularPedido = async (pedidoId, motivo) => {
+    try {
+      const pedido = normalizeOrder(await readResponse(await fetch(`${API_URL}/pedidos/${pedidoId}/anular`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo }),
+      })))
+      setData((current) => ({ ...current, pedidos: current.pedidos.map((item) => item.id === pedido.id ? pedido : item), comandas: current.comandas.map((comanda) => comanda.pedidoId === pedido.id ? { ...comanda, estado: pedido.estado } : comanda) }))
+      setError('')
+      return pedido
+    } catch (requestError) {
+      console.error('[Comercial] Error al anular pedido:', requestError)
+      setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 3000)
+      throw requestError
+    }
+  }
   const iniciarComanda = (pedidoId) => cambiarEstadoPedido(pedidoId, 'En preparación')
   const marcarListo = (pedidoId) => cambiarEstadoPedido(pedidoId, 'Listo')
-  const registrarIncidencia = (pedidoId, detalle) => setData((current) => ({ ...current, incidencias: [...current.incidencias, { id: crypto.randomUUID(), pedidoId, detalle, creadaEn: Date.now() }] }))
+  const registrarIncidencia = async (pedidoId, tipo, motivo) => {
+    try {
+      const incidencia = await readResponse(await fetch(`${API_URL}/incidencias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId, tipo, motivo }),
+      }))
+      setData((current) => ({ ...current, incidencias: [incidencia, ...current.incidencias] }))
+      setError('')
+      return incidencia
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
+  }
+  const emitirComprobante = async (comprobante) => {
+    try {
+      const factura = normalizeComprobante(await readResponse(await fetch(`${API_URL}/comprobantes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(comprobante),
+      })))
+      setData((current) => ({ ...current, facturas: [factura, ...current.facturas] }))
+      setError('')
+      return factura
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
+  }
+  const actualizarEstadoSunat = async (facturaId, estadoSunat) => {
+    try {
+      const factura = normalizeComprobante(await readResponse(await fetch(`${API_URL}/comprobantes/${facturaId}/sunat`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estadoSunat }),
+      })))
+      setData((current) => ({ ...current, facturas: current.facturas.map((item) => item.id === factura.id ? factura : item) }))
+      setError('')
+      return factura
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
+  }
+  const emitirNotaCredito = async (factura, motivo) => {
+    try {
+      const sourceFactura = typeof factura === 'object' ? factura : data.facturas.find((item) => item.id === factura)
+      if (!sourceFactura) throw new Error('Comprobante original no encontrado.')
+      if (sourceFactura.estadoSunat !== 'Aceptado') throw new Error('Solo se puede generar una nota de crédito para comprobantes Aceptados.')
+      const correlativo = String(data.facturas.filter((item) => item.tipo === 'Nota de crédito').length + 1).padStart(8, '0')
+      const note = normalizeComprobante(await readResponse(await fetch(`${API_URL}/comprobantes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId: sourceFactura.pedidoId, tipo: 'Nota de crédito', serie: 'NC01', correlativo, base: -Math.abs(sourceFactura.base), igv: -Math.abs(sourceFactura.igv), total: -Math.abs(sourceFactura.total), medioPago: sourceFactura.medioPago || 'Efectivo', originalComprobanteId: sourceFactura.id }),
+      })))
+      const normalizedNote = { ...note, numeroPedido: sourceFactura.numeroPedido, motivo }
+      setData((current) => ({ ...current, facturas: [normalizedNote, ...current.facturas] }))
+      setError('')
+      return normalizedNote
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
+  }
 
   const value = {
     ...data,
     platos,
+    categorias,
     mesas,
+    queueFilter,
+    setQueueFilter,
     loading,
     error,
     recargar: cargarDatos,
@@ -136,6 +243,9 @@ function ComercialProvider({ children }) {
     iniciarComanda,
     marcarListo,
     registrarIncidencia,
+    emitirComprobante,
+    actualizarEstadoSunat,
+    emitirNotaCredito,
     ventanaEdicion: (pedido) => Date.now() - pedido.confirmadoEn < WINDOW_MS,
   }
 

@@ -40,6 +40,14 @@ function AppRoutes() {
         element={user ? <Comercial view="new" /> : <Navigate to="/login" replace />}
       />
       <Route
+        path="/app/ventas/cobro"
+        element={user ? <Comercial view="cobro" /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/app/ventas/periodo"
+        element={user ? <Comercial view="periodo" /> : <Navigate to="/login" replace />}
+      />
+      <Route
         path="/app/cocina"
         element={user ? <Comercial view="cocina" /> : <Navigate to="/login" replace />}
       />

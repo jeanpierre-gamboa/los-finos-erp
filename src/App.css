@@ -417,8 +417,11 @@ tr:last-child td { border-bottom: 0; }
 .receipt-card .secondary-button { margin-top: 18px; }
 .credit-note { color: #20734a; font-weight: 800; }
 .period-panel { min-height: 320px; }
+.period-filters { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 24px; }
+.period-filters .input-row { min-width: 180px; }
 .period-table { display: grid; margin-top: 24px; border-top: 1px solid #e6ebf2; }
-.period-row { display: grid; grid-template-columns: 1.1fr 1fr 0.8fr 0.8fr 1fr auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid #edf0f4; color: #68778b; }
+.period-header-row, .period-row { display: grid; grid-template-columns: 1.1fr 0.9fr 0.9fr 1fr 0.8fr 0.8fr 0.8fr 0.9fr 1.8fr; gap: 10px; align-items: center; padding: 12px 0; border-bottom: 1px solid #edf0f4; color: #68778b; }
+.period-header-row { color: #1b365d; font-size: 0.76rem; text-transform: uppercase; }
 .period-row strong { color: #1b365d; }
 .period-sunat-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .sunat-small-button { padding: 5px 7px; border: 1px solid #d8e0eb; border-radius: 6px; background: #fff; color: #68778b; font-size: 0.7rem; font-weight: 800; cursor: pointer; }
@@ -426,6 +429,8 @@ tr:last-child td { border-bottom: 0; }
 .credit-small-button { padding: 5px 7px; border: 1px solid #e4b8ad; border-radius: 6px; background: #fff5f2; color: #b23a22; font-size: 0.7rem; font-weight: 800; cursor: pointer; }
 .credit-label { color: #b23a22; font-size: 0.75rem; font-weight: 800; }
 .period-credit-row { background: #fffaf8; }
+.period-totals { display: flex; justify-content: flex-end; gap: 24px; margin-top: 20px; padding-top: 16px; border-top: 2px solid #dfe7f1; color: #68778b; }
+.period-totals strong { margin-left: 8px; color: #1b365d; }
 
 @media (max-width: 700px) {
   .page-heading, .lines-heading, .table-toolbar { align-items: flex-start; flex-direction: column; }
@@ -439,7 +444,9 @@ tr:last-child td { border-bottom: 0; }
   .kitchen-board { grid-template-columns: 1fr; }
   .billing-layout { grid-template-columns: 1fr; }
   .period-row { grid-template-columns: 1fr 1fr; }
+  .period-header-row { display: none; }
   .period-sunat-actions { grid-column: 1 / -1; }
+  .period-totals { flex-direction: column; gap: 8px; }
   .section-nav { overflow-x: auto; }
   .queue-filter { margin-left: 0; flex: 0 0 auto; }
   .section-nav button { flex: 0 0 auto; }

@@ -103,12 +103,19 @@ function ComercialProvider({ children }) {
     cargarDatos()
   }, [])
 
-  const crearPedido = async ({ canal, mesa, lineas }) => {
+  const crearPedido = async ({ canal, mesa, lineas, clienteNombre, clienteTelefono, clienteDireccion }) => {
     try {
       const pedido = normalizeOrder(await readResponse(await fetch(`${API_URL}/pedidos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ canal, mesa: canal === 'Salón' ? mesa : null, productos: lineas.map((line) => ({ productoId: Number(line.platoId), cantidad: Number(line.cantidad) })) }),
+        body: JSON.stringify({ 
+          canal, 
+          mesa: canal === 'Salón' ? mesa : null, 
+          productos: lineas.map((line) => ({ productoId: Number(line.platoId), cantidad: Number(line.cantidad) })),
+          clienteNombre,
+          clienteTelefono,
+          clienteDireccion,
+        }),
       })))
       setData((current) => ({ ...current, pedidos: [pedido, ...current.pedidos], comandas: [makeComanda(pedido), ...current.comandas] }))
       setError('')

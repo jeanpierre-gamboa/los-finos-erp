@@ -257,7 +257,7 @@ app.listen(PORT, () => {
 });
 
 app.post('/api/pedidos', async (req, res) => {
-  const { canal, mesa, productos } = req.body || {};
+  const { canal, mesa, productos, clienteNombre, clienteTelefono, clienteDireccion } = req.body || {};
   if (!CHANNEL_PATTERNS[canal] || !Array.isArray(productos) || productos.length === 0) {
     return res.status(400).json({ error: 'Canal y productos son obligatorios.' });
   }
@@ -282,10 +282,21 @@ app.post('/api/pedidos', async (req, res) => {
     const canalId = await findChannelId(request, canal);
     if (!canalId) throw new Error(`No existe un canal activo para ${canal}.`);
 
+    let observaciones = null;
+    if (canal === 'Salón') {
+      observaciones = `Mesa: ${mesa}`;
+    } else if (clienteNombre || clienteTelefono || clienteDireccion) {
+      observaciones = [
+        clienteNombre ? `Cliente: ${clienteNombre}` : '',
+        clienteTelefono ? `Tel: ${clienteTelefono}` : '',
+        clienteDireccion ? `Dir: ${clienteDireccion}` : '',
+      ].filter(Boolean).join(' | ');
+    }
+
     const pedidoResult = await new sql.Request(transaction)
       .input('CanalID', sql.Int, canalId)
       .input('EmpleadoID', sql.Int, DEFAULT_EMPLOYEE_ID)
-      .input('Observaciones', sql.NVarChar, canal === 'Salón' ? `Mesa: ${mesa}` : null)
+      .input('Observaciones', sql.NVarChar, observaciones)
       .query(`
         INSERT INTO Pedido (CanalID, EmpleadoID, Estado, Observaciones)
         OUTPUT INSERTED.PedidoID
@@ -506,9 +517,16 @@ app.put('/api/pedidos/:id/anular', async (req, res) => {
     await transaction.begin();
     const current = await new sql.Request(transaction)
       .input('PedidoID', sql.BigInt, pedidoId)
-      .query('SELECT PedidoID, Estado, Observaciones FROM Pedido WITH (UPDLOCK, HOLDLOCK) WHERE PedidoID = @PedidoID');
+      .query('SELECT PedidoID, Estado, Observaciones, FechaHoraRegistro FROM Pedido WITH (UPDLOCK, HOLDLOCK) WHERE PedidoID = @PedidoID');
     if (!current.recordset[0]) return res.status(404).json({ error: 'Pedido no encontrado.' });
     if (current.recordset[0].Estado === 'Anulado') return res.status(409).json({ error: 'El pedido ya está anulado.' });
+    
+    const minutos = (Date.now() - new Date(current.recordset[0].FechaHoraRegistro).getTime()) / 60000;
+    if (minutos > 5) {
+      const error = new Error('Ya pasaron más de 5 minutos. El pedido no puede ser anulado directamente.');
+      error.statusCode = 403;
+      throw error;
+    }
     const observation = `${current.recordset[0].Observaciones || ''}${current.recordset[0].Observaciones ? ' | ' : ''}Anulación: ${motivo}`;
     await new sql.Request(transaction)
       .input('PedidoID', sql.BigInt, pedidoId)

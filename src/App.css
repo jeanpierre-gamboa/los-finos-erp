@@ -292,6 +292,11 @@ tr:last-child td { border-bottom: 0; }
 .status-autorizada { background: #e8f0fb; color: #1b365d; }
 .status-por-recibir { background: #fff6d9; color: #856404; }
 .status-recibida { background: #e6f5ed; color: #20734a; }
+.status-confirmado, .status-pendiente { background: #fff6d9; color: #856404; }
+.status-en-preparación { background: #e8f0fb; color: #1b365d; }
+.status-atendido, .status-aceptado { background: #e6f5ed; color: #20734a; }
+.status-anulado, .status-rechazado { background: #fff1e8; color: #b94a00; }
+.status-contingencia, .status-nc { background: #f0eafc; color: #604a91; }
 .authorize-button { padding: 7px 10px; border-radius: 6px; background: #1b365d; color: #fff; font-size: 0.78rem; font-weight: 800; }
 .back-link { margin-top: 22px; padding: 0; background: transparent; color: #1b365d; font-weight: 700; }
 .compact-heading { margin-bottom: 22px; }

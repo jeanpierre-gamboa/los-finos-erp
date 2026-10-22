@@ -1,142 +1,259 @@
-import { createContext, useContext, useState } from 'react'
-import {
-  calcularIGV,
-  calcularTotalConIGV,
-  formatearNumeroDocumento,
-  pedidosDemo,
-  comandasDemo,
-  comprobantesDemo,
-  preciosPorCanal,
-  productos,
-  siguienteCorrelativo,
-} from '../../data/comercialDemo.js'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { mesas } from '../../data/comercialDemo.js'
 
-const STORAGE_KEY = 'losfinos.comercial'
+const API_URL = 'http://localhost:3000/api'
+const WINDOW_MS = 5 * 60 * 1000
 const ComercialContext = createContext(null)
 
-function readInitialData() {
-  const demoComprobantes = comprobantesDemo.map((factura) => ({ ...factura, tipo: factura.tipo || 'Boleta', estadoCpe: factura.estadoCpe || 'Pendiente', fecha: factura.fecha }))
-  const demoData = { pedidos: pedidosDemo, cocina: comandasDemo, comprobantes: demoComprobantes, notasCredito: [] }
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const data = JSON.parse(stored)
-      return {
-        ...demoData,
-        ...data,
-        pedidos: [...demoData.pedidos, ...(data.pedidos || []).filter((pedido) => !demoData.pedidos.some((demo) => demo.id === pedido.id))],
-        cocina: [...demoData.cocina, ...(data.cocina || []).filter((comanda) => !demoData.cocina.some((demo) => demo.id === comanda.id))],
-        comprobantes: [...demoData.comprobantes, ...(data.comprobantes || []).filter((comprobante) => !demoData.comprobantes.some((demo) => demo.id === comprobante.id))],
-      }
-    }
-  } catch {
-    return demoData
+function normalizeChannel(value) {
+  if (value.includes('WhatsApp')) return 'WhatsApp'
+  if (value.includes('amfood') || value.includes('Llamafood')) return 'Llamafood'
+  return 'Salón'
+}
+
+function normalizeProduct(product) {
+  return {
+    id: Number(product.ProductoID),
+    nombre: product.NombreProducto,
+    categoriaId: Number(product.CategoriaID),
+    categoriaNombre: product.NombreCategoria,
+    precioActual: Number(product.PrecioActual),
   }
-  return demoData
+}
+
+function normalizeOrder(order) {
+  return {
+    ...order,
+    canal: normalizeChannel(order.canal || ''),
+    lineas: order.lineas.map((line) => ({
+      ...line,
+      platoId: Number(line.platoId),
+      cantidad: Number(line.cantidad),
+      precioUnitario: Number(line.precioUnitario),
+    })),
+  }
+}
+
+function normalizeComprobante(comprobante) {
+  return {
+    ...comprobante,
+    id: Number(comprobante.id || comprobante.ComprobanteID),
+    pedidoId: Number(comprobante.pedidoId || comprobante.PedidoID),
+    base: Number(comprobante.base || comprobante.Base),
+    igv: Number(comprobante.igv || comprobante.IGV),
+    total: Number(comprobante.total || comprobante.Total),
+    originalComprobanteId: comprobante.originalComprobanteId ? Number(comprobante.originalComprobanteId) : null,
+  }
+}
+
+function makeComanda(order) {
+  return {
+    id: `comanda-${order.id}`,
+    pedidoId: order.id,
+    numero: `COM-${String(order.id).padStart(3, '0')}`,
+    estado: order.estado,
+    lineas: order.lineas.map(({ platoId, platoNombre, cantidad }) => ({ platoId, platoNombre, cantidad })),
+  }
+}
+
+async function readResponse(response) {
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(body.error || 'No se pudo completar la operación.')
+  return body
 }
 
 function ComercialProvider({ children }) {
-  const [data, setData] = useState(readInitialData)
+  const [data, setData] = useState({ pedidos: [], comandas: [], incidencias: [], facturas: [] })
+  const [platos, setPlatos] = useState([])
+  const [categorias, setCategorias] = useState([])
+  const [queueFilter, setQueueFilter] = useState('activos')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const persistir = (nextData) => {
-    setData(nextData)
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData))
-  }
-
-  const crearPedido = ({ canal, mesa, lineas }) => {
-    const subtotal = lineas.reduce((total, linea) => total + linea.cantidad * linea.precioUnitario, 0)
-    const correlativo = data.pedidos.length + 1
-    const pedido = {
-      id: crypto.randomUUID(),
-      numero: formatearNumeroDocumento('PED', correlativo, 4),
-      correlativo,
-      canal,
-      mesa: canal === 'salon' ? mesa : '',
-      lineas,
-      subtotal,
-      igv: calcularIGV(subtotal),
-      total: calcularTotalConIGV(subtotal),
-      estado: 'Confirmado',
-      creadoEn: new Date().toISOString(),
-      incidencia: null,
+  const cargarDatos = async () => {
+    setLoading(true)
+    try {
+      const [productsResponse, categoriesResponse, ordersResponse, invoicesResponse, incidentsResponse] = await Promise.all([
+        fetch(`${API_URL}/productos`),
+        fetch(`${API_URL}/categorias`),
+        fetch(`${API_URL}/pedidos`),
+        fetch(`${API_URL}/comprobantes`),
+        fetch(`${API_URL}/incidencias`),
+      ])
+      const products = await readResponse(productsResponse)
+      const categories = await readResponse(categoriesResponse)
+      const orders = await readResponse(ordersResponse)
+      const invoices = await readResponse(invoicesResponse)
+      const incidents = await readResponse(incidentsResponse)
+      const pedidos = orders.map(normalizeOrder)
+      setPlatos(products.map(normalizeProduct))
+      setCategorias(categories.map((category) => ({ id: Number(category.CategoriaID), nombre: category.NombreCategoria })))
+      setData((current) => ({ ...current, pedidos, comandas: pedidos.map(makeComanda), facturas: invoices.map(normalizeComprobante), incidencias: incidents }))
+      setError('')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
     }
-    const cocina = { id: crypto.randomUUID(), pedidoId: pedido.id, numero: formatearNumeroDocumento('COM', correlativo, 4), estado: 'Pendiente', lineas, creadoEn: pedido.creadoEn, bajaReceta: [] }
-    persistir({ ...data, pedidos: [...data.pedidos, pedido], cocina: [...(data.cocina || []), cocina] })
-    return pedido
   }
 
-  const actualizarPedido = (pedidoId, changes) => {
-    const pedidos = data.pedidos.map((pedido) => {
-      if (pedido.id !== pedidoId) return pedido
-      const lineas = changes.lineas || pedido.lineas
-      const subtotal = lineas.reduce((total, linea) => total + linea.cantidad * linea.precioUnitario, 0)
-      return { ...pedido, ...changes, subtotal, igv: calcularIGV(subtotal), total: calcularTotalConIGV(subtotal) }
-    })
-    const updatedPedido = pedidos.find((pedido) => pedido.id === pedidoId)
-    const cocina = (data.cocina || []).map((item) => item.pedidoId === pedidoId ? { ...item, lineas: updatedPedido.lineas } : item)
-    persistir({ ...data, pedidos, cocina })
+  useEffect(() => {
+    // La carga inicial sincroniza el estado del contexto con la API.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarDatos()
+  }, [])
+
+  const crearPedido = async ({ canal, mesa, lineas, clienteNombre, clienteTelefono, clienteDireccion }) => {
+    try {
+      const pedido = normalizeOrder(await readResponse(await fetch(`${API_URL}/pedidos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          canal, 
+          mesa: canal === 'Salón' ? mesa : null, 
+          productos: lineas.map((line) => ({ productoId: Number(line.platoId), cantidad: Number(line.cantidad) })),
+          clienteNombre,
+          clienteTelefono,
+          clienteDireccion,
+        }),
+      })))
+      setData((current) => ({ ...current, pedidos: [pedido, ...current.pedidos], comandas: [makeComanda(pedido), ...current.comandas] }))
+      setError('')
+      return pedido
+    } catch (requestError) {
+      setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 2500)
+      throw requestError
+    }
   }
 
-  const anularPedido = (pedidoId) => actualizarPedido(pedidoId, { estado: 'Anulado', anuladoEn: new Date().toISOString() })
-
-  const registrarIncidencia = (pedidoId, incidencia) => actualizarPedido(pedidoId, {
-    incidencia: { ...incidencia, registradaEn: new Date().toISOString() },
-  })
-
-  const cambiarEstadoCocina = (cocinaId, estado) => {
-    const cocina = (data.cocina || []).map((item) => item.id === cocinaId ? { ...item, estado } : item)
-    persistir({ ...data, cocina })
+  const cambiarEstadoPedido = async (pedidoId, estado) => {
+    try {
+      const updated = normalizeOrder(await readResponse(await fetch(`${API_URL}/pedidos/${pedidoId}/estado`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      })))
+      setData((current) => ({
+        ...current,
+        pedidos: current.pedidos.map((pedido) => pedido.id === updated.id ? updated : pedido),
+        comandas: current.comandas.map((comanda) => comanda.pedidoId === updated.id ? { ...comanda, estado: updated.estado } : comanda),
+      }))
+      setError('')
+      return updated
+    } catch (requestError) {
+      setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 3000)
+      throw requestError
+    }
   }
 
-  const atenderPedido = (cocinaId) => {
-    const item = data.cocina.find((cocina) => cocina.id === cocinaId)
-    if (!item) return
-    const bajaReceta = item.lineas.flatMap((linea) => {
-      const producto = productos.find((candidate) => candidate.id === linea.productoId)
-      return (producto?.receta || []).map((receta) => ({ ...receta, cantidad: Number((receta.cantidad * linea.cantidad).toFixed(3)) }))
-    })
-    const cocina = data.cocina.map((cocina) => cocina.id === cocinaId ? { ...cocina, estado: 'Atendido', bajaReceta, atendidoEn: new Date().toISOString() } : cocina)
-    const pedidos = data.pedidos.map((pedido) => pedido.id === item.pedidoId ? { ...pedido, estado: 'Atendido' } : pedido)
-    persistir({ ...data, cocina, pedidos })
+  const actualizarPedido = (pedidoId, changes) => setData((current) => ({ ...current, pedidos: current.pedidos.map((pedido) => pedido.id === pedidoId ? { ...pedido, ...changes } : pedido) }))
+  const anularPedido = async (pedidoId, motivo) => {
+    try {
+      const pedido = normalizeOrder(await readResponse(await fetch(`${API_URL}/pedidos/${pedidoId}/anular`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo }),
+      })))
+      setData((current) => ({ ...current, pedidos: current.pedidos.map((item) => item.id === pedido.id ? pedido : item), comandas: current.comandas.map((comanda) => comanda.pedidoId === pedido.id ? { ...comanda, estado: pedido.estado } : comanda) }))
+      setError('')
+      return pedido
+    } catch (requestError) {
+      console.error('[Comercial] Error al anular pedido:', requestError)
+      setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 3000)
+      throw requestError
+    }
   }
-
-  const emitirComprobante = (pedidoId, datos) => {
-    const pedido = data.pedidos.find((item) => item.id === pedidoId)
-    if (!pedido) return
-    const serie = datos.tipo === 'Factura' ? 'F001' : 'B001'
-    const correlativo = siguienteCorrelativo(data.comprobantes || [], serie)
-    const comprobante = { id: crypto.randomUUID(), pedidoId, tipo: datos.tipo, serie, correlativo, numero: formatearNumeroDocumento(serie, correlativo), fecha: new Date().toISOString(), medioPago: datos.medioPago, ruc: datos.ruc || '', razonSocial: datos.razonSocial || '', direccion: datos.direccion || '', base: pedido.subtotal, igv: pedido.igv, total: pedido.total, estadoCpe: 'Pendiente' }
-    const pedidos = data.pedidos.map((item) => item.id === pedidoId ? { ...item, estado: 'Facturado', comprobanteId: comprobante.id } : item)
-    persistir({ ...data, pedidos, comprobantes: [...(data.comprobantes || []), comprobante] })
-    return comprobante
+  const iniciarComanda = (pedidoId) => cambiarEstadoPedido(pedidoId, 'En preparación')
+  const marcarListo = (pedidoId) => cambiarEstadoPedido(pedidoId, 'Listo')
+  const registrarIncidencia = async (pedidoId, tipo, motivo) => {
+    try {
+      const incidencia = await readResponse(await fetch(`${API_URL}/incidencias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId, tipo, motivo }),
+      }))
+      setData((current) => ({ ...current, incidencias: [incidencia, ...current.incidencias] }))
+      setError('')
+      return incidencia
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
   }
-
-  const simularSunat = (comprobanteId, estadoCpe) => {
-    const comprobantes = data.comprobantes.map((comprobante) => comprobante.id === comprobanteId ? { ...comprobante, estadoCpe } : comprobante)
-    persistir({ ...data, comprobantes })
+  const emitirComprobante = async (comprobante) => {
+    try {
+      const factura = normalizeComprobante(await readResponse(await fetch(`${API_URL}/comprobantes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(comprobante),
+      })))
+      setData((current) => ({ ...current, facturas: [factura, ...current.facturas] }))
+      setError('')
+      return factura
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
   }
-
-  const crearNotaCredito = (comprobanteId, motivo) => {
-    const original = data.comprobantes.find((comprobante) => comprobante.id === comprobanteId)
-    if (!original) return
-    const correlativo = siguienteCorrelativo(data.notasCredito || [], 'NC01')
-    const nota = { id: crypto.randomUUID(), comprobanteId, serieOriginal: original.serie, numeroOriginal: original.numero, serie: 'NC01', correlativo, numero: formatearNumeroDocumento('NC01', correlativo), motivo, estado: 'NC', fecha: new Date().toISOString() }
-    persistir({ ...data, notasCredito: [...(data.notasCredito || []), nota] })
+  const actualizarEstadoSunat = async (facturaId, estadoSunat) => {
+    try {
+      const factura = normalizeComprobante(await readResponse(await fetch(`${API_URL}/comprobantes/${facturaId}/sunat`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estadoSunat }),
+      })))
+      setData((current) => ({ ...current, facturas: current.facturas.map((item) => item.id === factura.id ? factura : item) }))
+      setError('')
+      return factura
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
+  }
+  const emitirNotaCredito = async (factura, motivo) => {
+    try {
+      const sourceFactura = typeof factura === 'object' ? factura : data.facturas.find((item) => item.id === factura)
+      if (!sourceFactura) throw new Error('Comprobante original no encontrado.')
+      if (sourceFactura.estadoSunat !== 'Aceptado') throw new Error('Solo se puede generar una nota de crédito para comprobantes Aceptados.')
+      const correlativo = String(data.facturas.filter((item) => item.tipo === 'Nota de crédito').length + 1).padStart(8, '0')
+      const note = normalizeComprobante(await readResponse(await fetch(`${API_URL}/comprobantes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId: sourceFactura.pedidoId, tipo: 'Nota de crédito', serie: 'NC01', correlativo, base: -Math.abs(sourceFactura.base), igv: -Math.abs(sourceFactura.igv), total: -Math.abs(sourceFactura.total), medioPago: sourceFactura.medioPago || 'Efectivo', originalComprobanteId: sourceFactura.id }),
+      })))
+      const normalizedNote = { ...note, numeroPedido: sourceFactura.numeroPedido, motivo }
+      setData((current) => ({ ...current, facturas: [normalizedNote, ...current.facturas] }))
+      setError('')
+      return normalizedNote
+    } catch (requestError) {
+      setError(requestError.message)
+      throw requestError
+    }
   }
 
   const value = {
     ...data,
-    productos,
-    preciosPorCanal,
+    platos,
+    categorias,
+    mesas,
+    queueFilter,
+    setQueueFilter,
+    loading,
+    error,
+    recargar: cargarDatos,
     crearPedido,
     actualizarPedido,
     anularPedido,
+    iniciarComanda,
+    marcarListo,
     registrarIncidencia,
-    cambiarEstadoCocina,
-    atenderPedido,
     emitirComprobante,
-    simularSunat,
-    crearNotaCredito,
+    actualizarEstadoSunat,
+    emitirNotaCredito,
+    ventanaEdicion: (pedido) => Date.now() - pedido.confirmadoEn < WINDOW_MS,
   }
 
   return <ComercialContext.Provider value={value}>{children}</ComercialContext.Provider>

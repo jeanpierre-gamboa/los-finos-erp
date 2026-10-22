@@ -7,6 +7,7 @@ import Compras from './pages/Compras.jsx'
 import Comercial from './pages/Comercial.jsx'
 import './App.css'
 import { ComprasProvider } from './modules/compras/ComprasContext.jsx'
+import Comercial from './pages/Comercial.jsx'
 import { ComercialProvider } from './modules/comercial/ComercialContext.jsx'
 
 function AppRoutes() {
@@ -38,6 +39,26 @@ function AppRoutes() {
       <Route path="/comercial/cobro" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
       <Route path="/comercial/periodo" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
       <Route path="/comercial/nota-credito" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
+      <Route
+        path="/app/ventas"
+        element={user ? <Comercial /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/app/ventas/nuevo"
+        element={user ? <Comercial view="new" /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/app/ventas/cobro"
+        element={user ? <Comercial view="cobro" /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/app/ventas/periodo"
+        element={user ? <Comercial view="periodo" /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/app/cocina"
+        element={user ? <Comercial view="cocina" /> : <Navigate to="/login" replace />}
+      />
       <Route
         path="/app/:modulo"
         element={user ? <ModuleShell /> : <Navigate to="/login" replace />}

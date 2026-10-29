@@ -42,7 +42,7 @@ function Launcher() {
             key={module.key}
             type="button"
             className="module-card"
-            onClick={() => navigate(`/app/${module.key}`)}
+            onClick={() => navigate(module.key === 'comercial' ? '/comercial' : `/app/${module.key}`)}
           >
             <span className="module-icon">{module.label.slice(0, 2).toUpperCase()}</span>
             <span className="module-name">{module.label}</span>

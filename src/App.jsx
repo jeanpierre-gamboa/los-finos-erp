@@ -39,6 +39,13 @@ function AppRoutes() {
       </Route>
       <Route path="/app/compras/*" element={<Navigate to="/app/logistica/compras" replace />} />
       <Route path="/app/almacenes/*" element={<Navigate to="/app/logistica/inventarios" replace />} />
+      <Route path="/comercial" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
+      <Route path="/comercial/pedido" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
+      <Route path="/comercial/cola" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
+      <Route path="/comercial/cocina" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
+      <Route path="/comercial/cobro" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
+      <Route path="/comercial/periodo" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
+      <Route path="/comercial/nota-credito" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
       <Route
         path="/app/ventas"
         element={user ? <Comercial /> : <Navigate to="/login" replace />}

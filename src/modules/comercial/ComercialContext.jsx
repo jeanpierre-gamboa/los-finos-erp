@@ -24,6 +24,7 @@ function normalizeProduct(product) {
 function normalizeOrder(order) {
   return {
     ...order,
+    id: Number(order.id),
     canal: normalizeChannel(order.canal || ''),
     lineas: order.lineas.map((line) => ({
       ...line,
@@ -39,9 +40,9 @@ function normalizeComprobante(comprobante) {
     ...comprobante,
     id: Number(comprobante.id || comprobante.ComprobanteID),
     pedidoId: Number(comprobante.pedidoId || comprobante.PedidoID),
-    base: Number(comprobante.base || comprobante.Base),
-    igv: Number(comprobante.igv || comprobante.IGV),
-    total: Number(comprobante.total || comprobante.Total),
+    base: Number(comprobante.base ?? comprobante.Base),
+    igv: Number(comprobante.igv ?? comprobante.IGV),
+    total: Number(comprobante.total ?? comprobante.Total),
     originalComprobanteId: comprobante.originalComprobanteId ? Number(comprobante.originalComprobanteId) : null,
   }
 }
@@ -99,7 +100,6 @@ function ComercialProvider({ children }) {
 
   useEffect(() => {
     // La carga inicial sincroniza el estado del contexto con la API.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarDatos()
   }, [])
 
@@ -168,18 +168,31 @@ function ComercialProvider({ children }) {
   }
   const iniciarComanda = (pedidoId) => cambiarEstadoPedido(pedidoId, 'En preparación')
   const marcarListo = (pedidoId) => cambiarEstadoPedido(pedidoId, 'Listo')
-  const registrarIncidencia = async (pedidoId, tipo, motivo) => {
+  const registrarIncidencia = async (pedidoId, tipo, motivo, responsable) => {
     try {
       const incidencia = await readResponse(await fetch(`${API_URL}/incidencias`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pedidoId, tipo, motivo }),
+        body: JSON.stringify({ pedidoId, tipo, motivo, responsable }),
       }))
       setData((current) => ({ ...current, incidencias: [incidencia, ...current.incidencias] }))
       setError('')
       return incidencia
     } catch (requestError) {
       setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 2500)
+      throw requestError
+    }
+  }
+  const resolverIncidencia = async (incidenciaId) => {
+    try {
+      const incidencia = await readResponse(await fetch(`${API_URL}/incidencias/${incidenciaId}/resolver`, { method: 'PUT' }))
+      setData((current) => ({ ...current, incidencias: current.incidencias.map((item) => item.id === incidencia.id ? incidencia : item) }))
+      setError('')
+      return incidencia
+    } catch (requestError) {
+      setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 2500)
       throw requestError
     }
   }
@@ -190,11 +203,12 @@ function ComercialProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(comprobante),
       })))
-      setData((current) => ({ ...current, facturas: [factura, ...current.facturas] }))
+      setData((current) => ({ ...current, facturas: [{ ...factura, numeroPedido: comprobante.numeroPedido }, ...current.facturas] }))
       setError('')
-      return factura
+      return { ...factura, numeroPedido: comprobante.numeroPedido }
     } catch (requestError) {
       setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 3000)
       throw requestError
     }
   }
@@ -205,31 +219,36 @@ function ComercialProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estadoSunat }),
       })))
-      setData((current) => ({ ...current, facturas: current.facturas.map((item) => item.id === factura.id ? factura : item) }))
+      setData((current) => ({ ...current, facturas: current.facturas.map((item) => item.id === factura.id ? { ...item, ...factura, numeroPedido: item.numeroPedido } : item) }))
       setError('')
       return factura
     } catch (requestError) {
       setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 3000)
       throw requestError
     }
   }
   const emitirNotaCredito = async (factura, motivo) => {
     try {
-      const sourceFactura = typeof factura === 'object' ? factura : data.facturas.find((item) => item.id === factura)
-      if (!sourceFactura) throw new Error('Comprobante original no encontrado.')
+      const facturaId = typeof factura === 'object' ? factura?.id : factura
+      const sourceFactura = data.facturas.find((item) => item.id === Number(facturaId))
+      if (!sourceFactura || sourceFactura.tipo === 'Nota de crédito') throw new Error('El comprobante original no existe o no es válido para una nota de crédito.')
+      const motivoLimpio = String(motivo || '').trim()
+      if (!motivoLimpio) throw new Error('El motivo de la nota de crédito es obligatorio.')
       if (sourceFactura.estadoSunat !== 'Aceptado') throw new Error('Solo se puede generar una nota de crédito para comprobantes Aceptados.')
-      const correlativo = String(data.facturas.filter((item) => item.tipo === 'Nota de crédito').length + 1).padStart(8, '0')
       const note = normalizeComprobante(await readResponse(await fetch(`${API_URL}/comprobantes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pedidoId: sourceFactura.pedidoId, tipo: 'Nota de crédito', serie: 'NC01', correlativo, base: -Math.abs(sourceFactura.base), igv: -Math.abs(sourceFactura.igv), total: -Math.abs(sourceFactura.total), medioPago: sourceFactura.medioPago || 'Efectivo', originalComprobanteId: sourceFactura.id }),
+        body: JSON.stringify({ pedidoId: sourceFactura.pedidoId, tipo: 'Nota de crédito', serie: 'NC01', base: -Math.abs(sourceFactura.base), igv: -Math.abs(sourceFactura.igv), total: -Math.abs(sourceFactura.total), medioPago: sourceFactura.medioPago || 'Efectivo', originalComprobanteId: sourceFactura.id, motivo: motivoLimpio }),
       })))
-      const normalizedNote = { ...note, numeroPedido: sourceFactura.numeroPedido, motivo }
+      const numeroPedido = sourceFactura.numeroPedido || data.pedidos.find((pedido) => pedido.id === sourceFactura.pedidoId)?.numero
+      const normalizedNote = { ...note, numeroPedido }
       setData((current) => ({ ...current, facturas: [normalizedNote, ...current.facturas] }))
       setError('')
       return normalizedNote
     } catch (requestError) {
       setError(requestError.message)
+      setTimeout(() => setError((current) => current === requestError.message ? '' : current), 3000)
       throw requestError
     }
   }
@@ -250,6 +269,7 @@ function ComercialProvider({ children }) {
     iniciarComanda,
     marcarListo,
     registrarIncidencia,
+    resolverIncidencia,
     emitirComprobante,
     actualizarEstadoSunat,
     emitirNotaCredito,

@@ -3,12 +3,18 @@ import { AuthProvider, useAuth } from './app/AuthContext.jsx'
 import Login from './pages/Login.jsx'
 import Launcher from './pages/Launcher.jsx'
 import ModuleShell from './pages/ModuleShell.jsx'
-import Compras from './pages/Compras.jsx'
-import Comercial from './pages/Comercial.jsx'
 import './App.css'
-import { ComprasProvider } from './modules/compras/ComprasContext.jsx'
 import Comercial from './pages/Comercial.jsx'
 import { ComercialProvider } from './modules/comercial/ComercialContext.jsx'
+import LogisticaLayout from './modules/logistica/LogisticaLayout.jsx'
+import Resumen from './modules/logistica/pages/Resumen.jsx'
+import Planificacion from './modules/logistica/pages/Planificacion.jsx'
+import Solicitudes from './modules/logistica/pages/Solicitudes.jsx'
+import Compras from './modules/logistica/pages/Compras.jsx'
+import Recepcion from './modules/logistica/pages/Recepcion.jsx'
+import Inventarios from './modules/logistica/pages/Inventarios.jsx'
+import Control from './modules/logistica/pages/Control.jsx'
+import Catalogos from './modules/logistica/pages/Catalogos.jsx'
 
 function AppRoutes() {
   const { user } = useAuth()
@@ -20,18 +26,19 @@ function AppRoutes() {
         path="/apps"
         element={user ? <Launcher /> : <Navigate to="/login" replace />}
       />
-      <Route
-        path="/app/compras/nueva"
-        element={user ? <Compras view="new" /> : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/app/compras"
-        element={user ? <Compras view="list" /> : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/app/compras/:orderId"
-        element={user ? <Compras view="list" /> : <Navigate to="/login" replace />}
-      />
+      <Route path="/app/logistica" element={<LogisticaLayout />}>
+        <Route index element={<Resumen />} />
+        <Route path="planificacion" element={<Planificacion />} />
+        <Route path="solicitudes" element={<Solicitudes />} />
+        <Route path="compras" element={<Compras />} />
+        <Route path="recepcion" element={<Recepcion />} />
+        <Route path="inventarios" element={<Inventarios />} />
+        <Route path="control" element={<Control />} />
+        <Route path="catalogos" element={<Catalogos />} />
+        <Route path="*" element={<Navigate to="/app/logistica" replace />} />
+      </Route>
+      <Route path="/app/compras/*" element={<Navigate to="/app/logistica/compras" replace />} />
+      <Route path="/app/almacenes/*" element={<Navigate to="/app/logistica/inventarios" replace />} />
       <Route path="/comercial" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
       <Route path="/comercial/pedido" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
       <Route path="/comercial/cola" element={user ? <Comercial /> : <Navigate to="/login" replace />} />
@@ -72,11 +79,9 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <ComprasProvider>
-          <ComercialProvider>
-            <AppRoutes />
-          </ComercialProvider>
-        </ComprasProvider>
+        <ComercialProvider>
+          <AppRoutes />
+        </ComercialProvider>
       </BrowserRouter>
     </AuthProvider>
   )

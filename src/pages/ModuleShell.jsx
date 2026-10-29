@@ -4,17 +4,15 @@ import { useAuth } from '../app/AuthContext.jsx'
 const MODULE_LABELS = {
   ventas: 'Ventas',
   cocina: 'Cocina',
-  compras: 'Compras',
-  almacenes: 'Almacenes',
   caja: 'Caja',
   gerencia: 'Gerencia',
 }
 
 const ROLE_ACCESS = {
-  gerente: ['ventas', 'cocina', 'compras', 'almacenes', 'caja', 'gerencia'],
+  gerente: ['ventas', 'cocina', 'caja', 'gerencia'],
   caja: ['ventas', 'caja'],
   mozo: ['ventas'],
-  almacen: ['compras', 'almacenes'],
+  almacen: [],
   cocina: ['cocina'],
 }
 

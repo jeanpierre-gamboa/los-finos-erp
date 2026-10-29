@@ -4,8 +4,7 @@ import { useAuth } from '../app/AuthContext.jsx'
 const MODULES = [
   { key: 'ventas', label: 'Comercial', roles: ['gerente', 'caja', 'mozo'] },
   { key: 'cocina', label: 'Cocina', roles: ['gerente', 'cocina'] },
-  { key: 'compras', label: 'Compras', roles: ['gerente', 'almacen'] },
-  { key: 'almacenes', label: 'Almacenes', roles: ['gerente', 'almacen'] },
+  { key: 'logistica', label: 'Logística', roles: ['gerente', 'almacen'] },
   { key: 'caja', label: 'Caja', roles: ['gerente', 'caja'] },
   { key: 'gerencia', label: 'Gerencia', roles: ['gerente'] },
 ]

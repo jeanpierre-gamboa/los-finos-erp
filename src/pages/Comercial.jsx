@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../app/AuthContext.jsx'
 import { useComercial } from '../modules/comercial/ComercialContext.jsx'
+import ComercialShell from '../modules/comercial/ComercialShell.jsx'
+
+const API_URL = 'http://localhost:3000/api'
 
 const newLine = () => ({ id: crypto.randomUUID(), platoId: '', cantidad: 1, committed: false })
 function formatTime(timestamp) { 
@@ -13,50 +16,6 @@ function formatTime(timestamp) {
 }
 function money(value) { return `S/ ${Number(value).toFixed(2)}` }
 function StatusBadge({ status }) { return <span className={`status-badge status-${status.toLowerCase().replaceAll(' ', '-')}`}>{status}</span> }
-
-function Header({ user, role, onBack, onNavigate, view }) {
-  const { queueFilter, setQueueFilter } = useComercial()
-  return (
-    <>
-      <header className="module-header comercial-header">
-        <div className="brand-group">
-          <div className="brand-mark">LF</div>
-          <div>
-            <span>Los Finos</span>
-            <p className="header-module-name">{role === 'cocina' ? 'Cocina' : 'Comercial'}</p>
-          </div>
-        </div>
-        <div className="header-actions">
-          <button type="button" className="ghost-button" onClick={onBack}>Volver a apps</button>
-          <div className="user-meta">
-            <span>{user}</span>
-            <small>{role}</small>
-          </div>
-        </div>
-      </header>
-      {role !== 'cocina' ? (
-        <nav className="section-nav" aria-label="Secciones de Comercial">
-          <button type="button" className={view === 'comercial' ? 'active' : ''} onClick={() => onNavigate('/app/ventas')}>Cola de pedidos</button>
-          {view === 'comercial' ? (
-            <label className="queue-filter">
-              <span>Mostrar</span>
-              <select value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)}>
-                <option value="activos">Activos</option>
-                <option value="todos">Todos</option>
-                <option value="entregados">Entregados</option>
-                <option value="incidencia">Con incidencia</option>
-              </select>
-            </label>
-          ) : null}
-          <button type="button" className={view === 'new' ? 'active' : ''} onClick={() => onNavigate('/app/ventas/nuevo')}>Nuevo pedido</button>
-          <button type="button" className={view === 'cobro' ? 'active' : ''} onClick={() => onNavigate('/app/ventas/cobro')}>Cobro</button>
-          <button type="button" className={view === 'periodo' ? 'active' : ''} onClick={() => onNavigate('/app/ventas/periodo')}>Ventas del período</button>
-          {role === 'gerente' ? <button type="button" onClick={() => onNavigate('/app/cocina')}>Cocina</button> : null}
-        </nav>
-      ) : null}
-    </>
-  )
-}
 
 function OrderForm({ platos, categorias, mesas, initialOrder, onSave, onCancel }) {
   const [channel, setChannel] = useState(initialOrder?.canal || 'Salón')
@@ -219,24 +178,36 @@ function OrderForm({ platos, categorias, mesas, initialOrder, onSave, onCancel }
   )
 }
 
+const RESOLVE_LABELS = { Cocina: 'Rehacer plato', Caja: 'Ajustar cobro', 'Atención': 'Registrar solución' }
+
 function IncidentActions({ pedidoId }) {
   const navigate = useNavigate()
-  const { incidencias, registrarIncidencia } = useComercial()
+  const { incidencias, registrarIncidencia, resolverIncidencia } = useComercial()
   const [incidentOpen, setIncidentOpen] = useState(false)
   const [tipo, setTipo] = useState('Falla de producto')
   const [motivo, setMotivo] = useState('')
+  const [responsable, setResponsable] = useState('')
   const incident = incidencias.find((item) => item.pedidoId === pedidoId)
   const submit = async () => {
-    if (!motivo.trim()) return
-    await registrarIncidencia(pedidoId, tipo, motivo.trim())
+    if (!motivo.trim() || !responsable) return
+    await registrarIncidencia(pedidoId, tipo, motivo.trim(), responsable)
     setMotivo('')
+    setResponsable('')
     setIncidentOpen(false)
   }
   return (
     <>
       {incident ? (
         <div className="incident-success" role="status">
-          <strong>Con incidencia:</strong> {incident.tipo} · {incident.motivo}
+          <strong>Incidencia registrada</strong> · {incident.tipo} · Asignado a {incident.responsable}
+          <div>{incident.motivo}</div>
+          {incident.estado === 'Cerrada' ? (
+            <div><strong>Incidencia cerrada</strong></div>
+          ) : (
+            <button type="button" className="credit-link" onClick={() => resolverIncidencia(incident.id).catch(() => {})}>
+              {RESOLVE_LABELS[incident.responsable] || RESOLVE_LABELS['Atención']}
+            </button>
+          )}
           {['Falla de producto', 'Devolución'].includes(incident.tipo) ? (
             <button type="button" className="credit-link" onClick={() => navigate(`/app/ventas/cobro?pedidoId=${pedidoId}&tipo=Nota%20de%20crédito`)}>
               Generar nota de crédito
@@ -244,8 +215,8 @@ function IncidentActions({ pedidoId }) {
           ) : null}
         </div>
       ) : null}
-      <button type="button" className="secondary-button" onClick={() => setIncidentOpen(true)}>Registrar incidencia</button>
-      {incidentOpen ? (
+      {!incident ? <button type="button" className="secondary-button" onClick={() => setIncidentOpen(true)}>Registrar incidencia</button> : null}
+      {!incident && incidentOpen ? (
         <div className="incident-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setIncidentOpen(false) }}>
           <div className="incident-modal" role="dialog" aria-modal="true" aria-label="Registrar incidencia">
             <div className="incident-modal-heading">
@@ -263,10 +234,19 @@ function IncidentActions({ pedidoId }) {
               </select>
             </label>
             <label className="input-row">
+              <span>Responsable</span>
+              <select value={responsable} onChange={(event) => setResponsable(event.target.value)}>
+                <option value="">Selecciona responsable</option>
+                <option value="Cocina">Cocina</option>
+                <option value="Caja">Caja</option>
+                <option value="Atención">Atención</option>
+              </select>
+            </label>
+            <label className="input-row">
               <span>Motivo</span>
               <textarea value={motivo} onChange={(event) => setMotivo(event.target.value)} placeholder="Describe el motivo" />
             </label>
-            <button type="button" className="primary-button" disabled={!motivo.trim()} onClick={() => submit().catch(() => {})}>
+            <button type="button" className="primary-button" disabled={!motivo.trim() || !responsable} onClick={() => submit().catch(() => {})}>
               Guardar incidencia
             </button>
           </div>
@@ -368,11 +348,11 @@ function OrderCard({ pedido, onEdit, onCancel }) {
   )
 }
 
-function KitchenColumn({ title, status, tone, pedidos, comandas, onStart, onReady, onCancel }) {
-  const items = comandas
-    .map((comanda) => ({ comanda, pedido: pedidos.find((pedido) => pedido.id === comanda.pedidoId) }))
-    .filter(({ pedido }) => pedido && (pedido.estado === status || (status === 'Listo' && pedido.estado === 'Entregado')))
-    .sort((left, right) => left.pedido.confirmadoEn - right.pedido.confirmadoEn)
+function KitchenColumn({ title, status, tone, pedidos, readOnly, onStart, onReady }) {
+  // Solo el estado efectivo exacto de la columna; ningún estado desconocido cae en otra.
+  const items = pedidos
+    .filter((pedido) => pedido.estado === status)
+    .sort((left, right) => left.confirmadoEn - right.confirmadoEn || left.id - right.id)
 
   return (
     <section className={`kitchen-column kitchen-column-${tone}`} aria-label={title}>
@@ -380,33 +360,100 @@ function KitchenColumn({ title, status, tone, pedidos, comandas, onStart, onRead
         <h2>{title}</h2>
         <span>{items.length}</span>
       </header>
-      {items.map(({ comanda, pedido }) => (
-        <article className="kitchen-card" key={comanda.id}>
+      {items.map((pedido) => (
+        <article className="kitchen-card" key={pedido.id}>
           <div className="order-card-heading">
             <div>
-              <strong>{comanda.numero}</strong>
+              <strong>{`COM-${String(pedido.id).padStart(3, '0')}`}</strong>
               <span>{pedido.canal}{pedido.mesa ? ` · Mesa ${pedido.mesa}` : ''}</span>
             </div>
             <StatusBadge status={pedido.estado} />
           </div>
           <ul>
-            {comanda.lineas.map((line) => (
-              <li key={line.platoId}>
+            {pedido.lineas.map((line) => (
+              <li key={line.id ?? line.platoId}>
                 <strong>{line.cantidad} ×</strong> {line.platoNombre}
               </li>
             ))}
           </ul>
-          {status !== 'Listo' ? (
+          {status !== 'Listo' && !readOnly ? (
             <button type="button" className="primary-button" onClick={() => status === 'En preparación' ? onReady(pedido.id).catch(() => {}) : onStart(pedido.id).catch(() => {})}>
               {status === 'En preparación' ? 'Marcar listo' : 'Iniciar preparación'}
             </button>
           ) : null}
-          {['Pendiente', 'En preparación'].includes(pedido.estado) ? <CancelAction pedido={pedido} onCancel={onCancel} /> : null}
-          <IncidentActions pedidoId={pedido.id} />
         </article>
       ))}
       {!items.length ? <div className="kitchen-empty">Sin comandas</div> : null}
     </section>
+  )
+}
+
+function KitchenScreen({ iniciarComanda, marcarListo }) {
+  const [fecha, setFecha] = useState('') // vacío = hoy (el servidor lo resuelve en America/Lima)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [result, setResult] = useState({ key: null, data: null, error: '' })
+  const requestKey = `${fecha}|${refreshKey}`
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${API_URL}/cocina/pedidos${fecha ? `?fecha=${fecha}` : ''}`)
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(body.error || 'No se pudieron cargar las comandas.')
+        return body
+      })
+      .then((data) => { if (!cancelled) setResult({ key: requestKey, data, error: '' }) })
+      .catch((requestError) => { if (!cancelled) setResult({ key: requestKey, data: null, error: requestError.message }) })
+    return () => { cancelled = true }
+  }, [fecha, refreshKey, requestKey])
+
+  const data = result.data
+  const loading = result.key !== requestKey && !result.data
+  const failed = result.key === requestKey ? result.error : ''
+  const readOnly = Boolean(data) && data.fecha !== data.hoy
+  const shownDate = data?.fecha || fecha
+  const label = shownDate ? new Intl.DateTimeFormat('es-PE', { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(`${shownDate}T00:00:00Z`)) : ''
+  const pedidos = data && !failed ? data.pedidos : []
+  const refreshAfter = (action) => async (pedidoId) => {
+    await action(pedidoId)
+    setRefreshKey((key) => key + 1)
+  }
+
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Producción</p>
+          <h1>Pantalla de cocina</h1>
+          <p className="page-subtitle">{label ? `Comandas del ${label}${readOnly ? ' (modo consulta)' : ''}.` : 'Comandas organizadas por estado.'}</p>
+        </div>
+        <div className="cm-queue-tools">
+          <label className="queue-filter">
+            <span>Fecha</span>
+            <input type="date" value={shownDate} onChange={(event) => { setResult({ key: null, data: null, error: '' }); setFecha(event.target.value) }} />
+          </label>
+          <button type="button" className="secondary-button" onClick={() => { setResult({ key: null, data: null, error: '' }); setFecha('') }}>Hoy</button>
+        </div>
+      </div>
+      {data?.anteriores?.cantidad ? (
+        <div className="kitchen-notice" role="status">
+          <span>Hay {data.anteriores.cantidad} pedido(s) Pendiente o En preparación de fechas anteriores. No se modifican automáticamente.</span>
+          <span className="kitchen-notice-links">
+            {data.anteriores.fechas.map((item) => (
+              <button type="button" key={item.fecha} className="secondary-button" onClick={() => { setResult({ key: null, data: null, error: '' }); setFecha(item.fecha) }}>{item.fecha} ({item.cantidad})</button>
+            ))}
+          </span>
+        </div>
+      ) : null}
+      {failed ? <div className="error-message" role="alert">{failed}</div> : null}
+      {loading ? <div className="empty-state">Cargando comandas...</div> : (
+        <div className="kitchen-board">
+          <KitchenColumn title="En cola" status="Pendiente" tone="pending" pedidos={pedidos} readOnly={readOnly} onStart={refreshAfter(iniciarComanda)} onReady={refreshAfter(marcarListo)} />
+          <KitchenColumn title="En preparación" status="En preparación" tone="preparing" pedidos={pedidos} readOnly={readOnly} onStart={refreshAfter(iniciarComanda)} onReady={refreshAfter(marcarListo)} />
+          <KitchenColumn title="Listas" status="Listo" tone="ready" pedidos={pedidos} readOnly={readOnly} onStart={refreshAfter(iniciarComanda)} onReady={refreshAfter(marcarListo)} />
+        </div>
+      )}
+    </>
   )
 }
 
@@ -422,45 +469,74 @@ function BillingScreen({ pedidos, facturas, emitirComprobante, actualizarEstadoS
   const [ruc, setRuc] = useState('')
   const [razonSocial, setRazonSocial] = useState('')
   const [issued, setIssued] = useState(null)
+  const [showReceipt, setShowReceipt] = useState(false)
+  const [pagoConfirmado, setPagoConfirmado] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [billingError, setBillingError] = useState('')
+  const showError = (message) => {
+    setBillingError(message)
+    setTimeout(() => setBillingError((current) => current === message ? '' : current), 3000)
+  }
   const selectedOrder = availableOrders.find((pedido) => String(pedido.id) === String(selectedId))
   const originalComprobante = facturas.find((factura) => factura.pedidoId === Number(selectedId) && factura.tipo !== 'Nota de crédito')
   const orderTotal = selectedOrder?.lineas.reduce((sum, line) => sum + line.cantidad * line.precioUnitario, 0) || 0
   const base = orderTotal / 1.18
   const igv = orderTotal - base
 
+  const rejectPayment = () => {
+    setPagoConfirmado(false)
+    setMedioPago('')
+    showError('El pago no fue confirmado. Selecciona nuevamente el medio de pago.')
+  }
+
   const issue = async (event) => {
     event.preventDefault()
+    if (submitting) return
     if (!selectedOrder) {
-      setBillingError('Selecciona un pedido para emitir el comprobante.')
+      showError('Selecciona un pedido para emitir el comprobante.')
       return
     }
-    if (tipo === 'Factura' && (!ruc.trim() || !razonSocial.trim())) {
-      setBillingError('Completa RUC y razón social para emitir una Factura.')
+    if (tipo === 'Nota de crédito') {
+      showError('Las notas de crédito se emiten desde "Ventas del período" o desde el comprobante emitido, indicando el motivo.')
       return
     }
+    if (!medioPago) {
+      showError('Selecciona un medio de pago.')
+      return
+    }
+    if (!pagoConfirmado) {
+      showError('Confirma que el pago fue recibido antes de emitir.')
+      return
+    }
+    if (tipo === 'Factura' && (!/^\d{11}$/.test(ruc.trim()) || !razonSocial.trim())) {
+      showError('Para emitir una Factura ingresa un RUC de 11 dígitos y la razón social.')
+      return
+    }
+    setSubmitting(true)
     try {
       const comprobante = await emitirComprobante({
         pedidoId: selectedOrder.id,
         numeroPedido: selectedOrder.numero,
         tipo,
         medioPago,
-        ruc,
-        razonSocial,
+        ruc: ruc.trim(),
+        razonSocial: razonSocial.trim(),
         base,
         igv,
         total: orderTotal,
         serie: tipo === 'Factura' ? 'F001' : tipo === 'Nota de crédito' ? 'NC01' : 'B001',
-        correlativo: String(facturas.length + 1).padStart(8, '0'),
         originalComprobanteId: tipo === 'Nota de crédito' ? originalComprobante?.id : null,
       })
       setIssued(comprobante)
+      setShowReceipt(false)
       setBillingError('')
-    } catch (requestError) {
+      setPagoConfirmado(false)
       setSelectedId('')
+    } catch (requestError) {
       setIssued(null)
-      setBillingError(requestError.message)
-      setTimeout(() => setBillingError((current) => current === requestError.message ? '' : current), 3000)
+      showError(requestError.message)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -488,7 +564,8 @@ function BillingScreen({ pedidos, facturas, emitirComprobante, actualizarEstadoS
           </div>
           <label className="input-row">
             <span>Medio de pago</span>
-            <select value={medioPago} onChange={(event) => setMedioPago(event.target.value)}>
+            <select value={medioPago} onChange={(event) => { setMedioPago(event.target.value); setPagoConfirmado(false) }}>
+              <option value="">Selecciona medio de pago</option>
               <option>Efectivo</option>
               <option>Tarjeta</option>
               <option>Yape</option>
@@ -496,6 +573,18 @@ function BillingScreen({ pedidos, facturas, emitirComprobante, actualizarEstadoS
               <option>Transferencia</option>
             </select>
           </label>
+          {medioPago ? (
+            <div className="payment-confirm">
+              {pagoConfirmado ? (
+                <span>Pago confirmado ({medioPago})</span>
+              ) : (
+                <>
+                  <button type="button" className="secondary-button" onClick={() => setPagoConfirmado(true)}>Confirmar pago recibido</button>
+                  <button type="button" className="secondary-button" onClick={rejectPayment}>Pago no confirmado</button>
+                </>
+              )}
+            </div>
+          ) : null}
           {tipo === 'Factura' ? (
             <div className="form-grid">
               <label className="input-row">
@@ -514,14 +603,20 @@ function BillingScreen({ pedidos, facturas, emitirComprobante, actualizarEstadoS
             <span>Total <strong>{money(orderTotal)}</strong></span>
           </div>
           {billingError ? <div className="error-message" role="alert">{billingError}</div> : null}
-          <button type="submit" className="primary-button">Emitir comprobante demo</button>
+          <button type="submit" className="primary-button" disabled={submitting}>{submitting ? 'Emitiendo...' : 'Emitir comprobante'}</button>
         </form>
       </div>
-      {issued ? (
+      {issued && !showReceipt ? (
+        <div className="billing-panel billing-help">
+          <h2>Comprobante emitido</h2>
+          <p>{issued.serie}-{issued.correlativo} · {money(issued.total)}</p>
+          <button type="button" className="primary-button" onClick={() => setShowReceipt(true)}>Ver comprobante</button>
+        </div>
+      ) : issued ? (
         <ReceiptCard
           factura={issued}
-          onSunat={(status) => { actualizarEstadoSunat(issued.id, status); setIssued((current) => ({ ...current, estadoSunat: status })) }}
-          onCredit={() => { emitirNotaCredito(issued.id); setIssued((current) => ({ ...current, notaCredito: { serie: 'FC01', correlativo: '00000001', emitidoEn: Date.now() } })) }}
+          onSunat={async (status) => { const updated = await actualizarEstadoSunat(issued.id, status); setIssued((current) => ({ ...current, estadoSunat: updated.estadoSunat })) }}
+          onCredit={(motivo) => emitirNotaCredito(issued, motivo)}
         />
       ) : (
         <div className="billing-panel billing-help">
@@ -535,9 +630,33 @@ function BillingScreen({ pedidos, facturas, emitirComprobante, actualizarEstadoS
 
 function ReceiptCard({ factura, onSunat, onCredit }) {
   const [sunatStatus, setSunatStatus] = useState(factura.estadoSunat)
-  const [creditNote, setCreditNote] = useState(factura.notaCredito)
-  const simulateSunat = (status) => { setSunatStatus(status); Promise.resolve(onSunat(status)).catch(() => {}) }
-  const issueCredit = () => { const note = onCredit(); setCreditNote(note || { serie: 'FC01', correlativo: '00000001' }) }
+  const [creditNote, setCreditNote] = useState(null)
+  const [motivo, setMotivo] = useState('')
+  const [message, setMessage] = useState('')
+  const showMessage = (text) => {
+    setMessage(text)
+    setTimeout(() => setMessage((current) => current === text ? '' : current), 3000)
+  }
+  const simulateSunat = async (status) => {
+    try {
+      await onSunat(status)
+      setSunatStatus(status)
+    } catch (requestError) {
+      showMessage(requestError.message)
+    }
+  }
+  const issueCredit = async () => {
+    if (!motivo.trim()) {
+      showMessage('Ingresa el motivo de la nota de crédito.')
+      return
+    }
+    try {
+      setCreditNote(await onCredit(motivo.trim()))
+      setMotivo('')
+    } catch (requestError) {
+      showMessage(requestError.message)
+    }
+  }
   return (
     <article className="receipt-card">
       <div className="receipt-heading">
@@ -561,8 +680,19 @@ function ReceiptCard({ factura, onSunat, onCredit }) {
         <button type="button" onClick={() => simulateSunat('Rechazado')}>Rechazado</button>
         <button type="button" onClick={() => simulateSunat('Contingencia')}>Contingencia</button>
       </div>
-      <button type="button" className="secondary-button" onClick={issueCredit}>Emitir nota de crédito demo</button>
-      {creditNote ? <p className="credit-note">Nota de crédito: {creditNote.serie}-{creditNote.correlativo}</p> : null}
+      <label className="input-row">
+        <span>Motivo de nota de crédito</span>
+        <input value={motivo} onChange={(event) => setMotivo(event.target.value)} placeholder="Motivo obligatorio" disabled={Boolean(creditNote)} />
+      </label>
+      <button type="button" className="secondary-button" onClick={issueCredit} disabled={Boolean(creditNote)}>Emitir nota de crédito</button>
+      {message ? <div className="error-message" role="alert">{message}</div> : null}
+      {creditNote ? (
+        <div className="credit-note">
+          <p>Nota de crédito: <strong>{creditNote.serie}-{creditNote.correlativo}</strong></p>
+          <p>Total: {money(creditNote.total)} · Estado SUNAT: {creditNote.estadoSunat}</p>
+          <p>Motivo: {creditNote.motivo}</p>
+        </div>
+      ) : null}
     </article>
   )
 }
@@ -574,41 +704,64 @@ function SalesPeriodScreen({ facturas }) {
   const [creditTarget, setCreditTarget] = useState(null)
   const [motivo, setMotivo] = useState('')
   const [creditError, setCreditError] = useState('')
-  const filtered = facturas.filter((factura) => {
+  const [detail, setDetail] = useState(null)
+  const [exportError, setExportError] = useState('')
+  const changeSunat = (id, status) => actualizarEstadoSunat(id, status).catch(() => {})
+  const rangeInvalid = Boolean(from && to && from > to)
+  const filtered = rangeInvalid ? [] : facturas.filter((factura) => {
     const emitted = new Date(factura.emitidoEn)
     const after = !from || emitted >= new Date(`${from}T00:00:00`)
-    const before = !to || emitted <= new Date(`${to}T23:59:59`)
+    const before = !to || emitted <= new Date(`${to}T23:59:59.999`)
     return after && before
   })
-  const totals = filtered.filter((factura) => factura.estadoSunat === 'Aceptado').reduce((sum, factura) => ({
+  // Las notas de crédito tienen importes negativos, por lo que restan del período; los rechazados no cuentan.
+  const totals = filtered.filter((factura) => factura.estadoSunat !== 'Rechazado').reduce((sum, factura) => ({
     base: sum.base + Number(factura.base),
     igv: sum.igv + Number(factura.igv),
     total: sum.total + Number(factura.total),
   }), { base: 0, igv: 0, total: 0 })
 
+  const localDate = (timestamp) => {
+    const date = new Date(timestamp)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  }
+
   const exportRvie = () => {
-    const rows = [['Tipo documento', 'Serie', 'Número', 'Fecha', 'Base', 'IGV', 'Total'], ...filtered.map((factura) => [
-      factura.tipo, factura.serie, factura.correlativo, new Date(factura.emitidoEn).toISOString().slice(0, 10),
-      factura.base.toFixed(2), factura.igv.toFixed(2), factura.total.toFixed(2),
+    if (!filtered.length) {
+      setExportError('No hay comprobantes en el período para exportar.')
+      setTimeout(() => setExportError(''), 3000)
+      return
+    }
+    const rows = [['Tipo documento', 'Serie', 'Correlativo', 'Fecha', 'Base', 'IGV', 'Total', 'Estado SUNAT'], ...filtered.map((factura) => [
+      factura.tipo, factura.serie, factura.correlativo, localDate(factura.emitidoEn),
+      factura.base.toFixed(2), factura.igv.toFixed(2), factura.total.toFixed(2), factura.estadoSunat,
     ])]
-    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n')
+    rows.push(['', '', '', 'TOTAL (sin rechazados)', totals.base.toFixed(2), totals.igv.toFixed(2), totals.total.toFixed(2), ''])
+    const csv = '\ufeff' + rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = `RVIE-${from || 'inicio'}-${to || 'hoy'}.csv`
+    link.download = `Resumen-ventas-${from || 'inicio'}-${to || 'hoy'}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }
 
   const submitCredit = async () => {
-    if (!creditTarget || !motivo.trim()) return
+    if (!creditTarget) return
+    if (!motivo.trim()) {
+      setCreditError('El motivo de la nota de crédito es obligatorio.')
+      setTimeout(() => setCreditError(''), 3000)
+      return
+    }
     try {
-      await emitirNotaCredito(creditTarget, motivo.trim())
+      const note = await emitirNotaCredito(creditTarget, motivo.trim())
       setCreditTarget(null)
       setMotivo('')
       setCreditError('')
+      setDetail(note)
     } catch (requestError) {
       setCreditError(requestError.message)
+      setTimeout(() => setCreditError((current) => current === requestError.message ? '' : current), 3000)
     }
   }
 
@@ -620,18 +773,20 @@ function SalesPeriodScreen({ facturas }) {
           <h1>Ventas del período</h1>
           <p className="page-subtitle">Reporte de comprobantes para SIRE/RVIE.</p>
         </div>
-        <button type="button" className="primary-button" onClick={exportRvie}>Exportar RVIE</button>
+        <button type="button" className="primary-button" onClick={exportRvie}>Exportar resumen</button>
       </div>
       <div className="period-filters">
         <label className="input-row">
           <span>Desde</span>
-          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <input type="date" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} />
         </label>
         <label className="input-row">
           <span>Hasta</span>
-          <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          <input type="date" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} />
         </label>
       </div>
+      {rangeInvalid ? <div className="error-message" role="alert">La fecha "Desde" no puede ser posterior a "Hasta".</div> : null}
+      {exportError ? <div className="error-message" role="alert">{exportError}</div> : null}
       {filtered.length ? (
         <div className="period-table">
           <div className="period-header-row">
@@ -656,11 +811,12 @@ function SalesPeriodScreen({ facturas }) {
               <span>{money(factura.total)}</span>
               <span className={`sunat-status sunat-${factura.estadoSunat.toLowerCase()}`}>{factura.estadoSunat}</span>
               <div className="period-sunat-actions">
+                <button type="button" className="sunat-small-button" onClick={() => setDetail(factura)}>Ver</button>
                 {factura.tipo !== 'Nota de crédito' ? (
                   <>
-                    <button type="button" className="sunat-small-button" onClick={() => actualizarEstadoSunat(factura.id, 'Aceptado')}>Aceptado</button>
-                    <button type="button" className="sunat-small-button" onClick={() => actualizarEstadoSunat(factura.id, 'Rechazado')}>Rechazado</button>
-                    <button type="button" className="sunat-small-button" onClick={() => actualizarEstadoSunat(factura.id, 'Contingencia')}>Contingencia</button>
+                    <button type="button" className="sunat-small-button" onClick={() => changeSunat(factura.id, 'Aceptado')}>Aceptado</button>
+                    <button type="button" className="sunat-small-button" onClick={() => changeSunat(factura.id, 'Rechazado')}>Rechazado</button>
+                    <button type="button" className="sunat-small-button" onClick={() => changeSunat(factura.id, 'Contingencia')}>Contingencia</button>
                     {factura.estadoSunat === 'Aceptado' ? (
                       <button type="button" className="credit-small-button" onClick={() => { setCreditTarget(factura); setMotivo(''); setCreditError('') }}>
                         Nota de crédito
@@ -678,10 +834,39 @@ function SalesPeriodScreen({ facturas }) {
         <div className="empty-state">No hay comprobantes en el rango seleccionado.</div>
       )}
       <div className="period-totals">
-        <span>Suma Base <strong>{money(totals.base)}</strong></span>
-        <span>Suma IGV <strong>{money(totals.igv)}</strong></span>
-        <span>Suma Total <strong>{money(totals.total)}</strong></span>
+        <span>Base imponible <strong>{money(totals.base)}</strong></span>
+        <span>IGV <strong>{money(totals.igv)}</strong></span>
+        <span>Total neto <strong>{money(totals.total)}</strong></span>
       </div>
+      {detail ? (
+        <div className="incident-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDetail(null) }}>
+          <div className="incident-modal" role="dialog" aria-modal="true" aria-label="Detalle del comprobante">
+            <div className="incident-modal-heading">
+              <h3>{detail.tipo} {detail.serie}-{detail.correlativo}</h3>
+              <button type="button" className="modal-close" onClick={() => setDetail(null)}>x</button>
+            </div>
+            <p>Pedido: {detail.numeroPedido || `Pedido ${detail.pedidoId}`}</p>
+            <p>Fecha: {new Date(detail.emitidoEn).toLocaleString('es-PE')}</p>
+            <p>Medio de pago: <strong>{detail.medioPago}</strong></p>
+            {detail.tipo === 'Factura' ? <p>{detail.ruc} · {detail.razonSocial}</p> : null}
+            {detail.tipo === 'Nota de crédito' ? (
+              <>
+                <p>Comprobante original: {(() => { const original = facturas.find((item) => item.id === detail.originalComprobanteId); return original ? `${original.serie}-${original.correlativo}` : detail.originalComprobanteId })()}</p>
+                <p>Motivo: {detail.motivo}</p>
+              </>
+            ) : null}
+            <div className="invoice-totals">
+              <span>Base <strong>{money(detail.base)}</strong></span>
+              <span>IGV <strong>{money(detail.igv)}</strong></span>
+              <span>Total <strong>{money(detail.total)}</strong></span>
+            </div>
+            <p>Estado SUNAT: <strong>{facturas.find((item) => item.id === detail.id)?.estadoSunat || detail.estadoSunat}</strong></p>
+            <div className="modal-actions">
+              <button type="button" className="secondary-button" onClick={() => setDetail(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {creditTarget ? (
         <div className="incident-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreditTarget(null) }}>
           <div className="incident-modal" role="dialog" aria-modal="true" aria-label="Generar nota de crédito">
@@ -711,7 +896,7 @@ function SalesPeriodScreen({ facturas }) {
 function Comercial({ view = 'comercial' }) {
   const navigate = useNavigate()
   const { user, role } = useAuth()
-  const { pedidos, comandas, incidencias, facturas, platos, categorias, mesas, loading, error, queueFilter, crearPedido, actualizarPedido, iniciarComanda, marcarListo, anularPedido, registrarIncidencia, emitirComprobante, actualizarEstadoSunat, emitirNotaCredito, ventanaEdicion } = useComercial()
+  const { pedidos, incidencias, facturas, platos, categorias, mesas, loading, error, queueFilter, setQueueFilter, crearPedido, actualizarPedido, iniciarComanda, marcarListo, anularPedido, registrarIncidencia, emitirComprobante, actualizarEstadoSunat, emitirNotaCredito, ventanaEdicion } = useComercial()
   const [editing, setEditing] = useState(null)
   const [newOrder, setNewOrder] = useState(false)
 
@@ -743,26 +928,12 @@ function Comercial({ view = 'comercial' }) {
   }
 
   return (
-    <div className="module-page comercial-page">
-      <Header user={user} role={role} view={view} onNavigate={navigate} onBack={() => navigate('/apps')} />
+    <ComercialShell>
       <main className="module-main comercial-main">
         {error ? <div className="error-message" role="alert">{error}</div> : null}
-        {loading ? <div className="empty-state">Cargando productos y pedidos...</div> : view === 'cocina' ? (
-          <>
-            <div className="page-heading">
-              <div>
-                <p className="eyebrow">Producción</p>
-                <h1>Pantalla de cocina</h1>
-                <p className="page-subtitle">Comandas organizadas por estado.</p>
-              </div>
-            </div>
-            <div className="kitchen-board">
-              <KitchenColumn title="En cola" status="Pendiente" tone="pending" pedidos={pedidos} comandas={comandas} onStart={iniciarComanda} onReady={marcarListo} />
-              <KitchenColumn title="En preparación" status="En preparación" tone="preparing" pedidos={pedidos} comandas={comandas} onStart={iniciarComanda} onReady={marcarListo} />
-              <KitchenColumn title="Listas" status="Listo" tone="ready" pedidos={pedidos} comandas={comandas} onStart={iniciarComanda} onReady={marcarListo} />
-            </div>
-          </>
-        ) : view === 'cobro' ? (
+        {view === 'cocina' ? (
+          <KitchenScreen iniciarComanda={iniciarComanda} marcarListo={marcarListo} />
+        ) : loading ? <div className="empty-state">Cargando productos y pedidos...</div> : view === 'cobro' ? (
           <BillingScreen pedidos={pedidos} facturas={facturas} emitirComprobante={emitirComprobante} actualizarEstadoSunat={actualizarEstadoSunat} emitirNotaCredito={emitirNotaCredito} />
         ) : view === 'periodo' ? (
           <SalesPeriodScreen facturas={facturas} />
@@ -784,7 +955,18 @@ function Comercial({ view = 'comercial' }) {
                 <h1>Cola de pedidos</h1>
                 <p className="page-subtitle">Seguimiento de pedidos ingresados por Comercial.</p>
               </div>
-              <button type="button" className="primary-button" onClick={() => setNewOrder(true)}>+ Nuevo pedido</button>
+              <div className="cm-queue-tools">
+                <label className="queue-filter">
+                  <span>Mostrar</span>
+                  <select value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)}>
+                    <option value="activos">Activos</option>
+                    <option value="todos">Todos</option>
+                    <option value="entregados">Entregados</option>
+                    <option value="incidencia">Con incidencia</option>
+                  </select>
+                </label>
+                <button type="button" className="primary-button" onClick={() => setNewOrder(true)}>+ Nuevo pedido</button>
+              </div>
             </div>
             <section className="order-card-list" aria-label="Pedidos en cola">
               {queue.map((pedido) => (
@@ -795,7 +977,7 @@ function Comercial({ view = 'comercial' }) {
           </>
         )}
       </main>
-    </div>
+    </ComercialShell>
   )
 }
 
